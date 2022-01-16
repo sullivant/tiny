@@ -468,6 +468,10 @@ fn get_utf8_char(buf: &[u8], len: u8) -> char {
     char::from_u32(codepoint).unwrap()
 }
 
+/// How many bytes to read from `stdin` in a single `read()`. A buffer of this size will be zero
+/// initialized every time, but won't be allocated in most cases.
+const STDIN_READ_SIZE: usize = 100;
+
 /// Read `stdin` until `read` fails with `EWOULDBLOCK` (happens in non-canonical mode, when `stdin`
 /// is set to non-blocking mode) or returns 0 (happens in non-canonical mode when `VMIN` and
 /// `VTIME` are 0). If you are using `term_input` with `termbox` then you don't need to set `stdin`
@@ -480,14 +484,14 @@ fn get_utf8_char(buf: &[u8], len: u8) -> char {
 pub fn read_stdin(buf: &mut Vec<u8>) -> Result<(), nix::Error> {
     loop {
         let old_len = buf.len();
-        buf.reserve(100);
-        unsafe {
-            buf.set_len(old_len + 100);
-        }
+
+        // `Vec::resize` calls `Vec::truncate` when the new length is smaller than the current,
+        // which does not change the capacity.
+        buf.resize(old_len + STDIN_READ_SIZE, 0);
 
         match nix::unistd::read(libc::STDIN_FILENO, &mut buf[old_len..]) {
             Ok(n_read) => {
-                unsafe { buf.set_len(old_len + n_read) };
+                buf.truncate(old_len + n_read);
                 if n_read == 0 {
                     // We're in non-canonical mode, or stdin is closed. We can't distinguish the
                     // two here but I think it's fine to return OK when stdin is closed.
@@ -495,7 +499,7 @@ pub fn read_stdin(buf: &mut Vec<u8>) -> Result<(), nix::Error> {
                 }
             }
             Err(err) => {
-                unsafe { buf.set_len(old_len) };
+                buf.truncate(old_len);
                 match err {
                     nix::Error::Sys(nix::errno::EWOULDBLOCK) => {
                         return Ok(());
