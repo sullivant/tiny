@@ -70,10 +70,17 @@ const NOTIFY_CMD: CmdUsage = CmdUsage::new(
     "`/notify [off|mentions|messages]`",
 );
 const SWITCH_CMD: CmdUsage = CmdUsage::new("switch", "Switches to tab", "`/switch <tab name>`");
-const RELOAD_CMD: CmdUsage = CmdUsage::new("reload", "Reloads config file", "`/reload`");
+const RELOAD_CMD: CmdUsage = CmdUsage::new("reload", "reloads config file", "`/reload`");
+const CHANNELS_CMD: CmdUsage = CmdUsage::new("channels", "lists joined channels", "`/channels`");
 
-const TUI_COMMANDS: [CmdUsage; 6] = [
-    QUIT_CMD, CLEAR_CMD, IGNORE_CMD, NOTIFY_CMD, SWITCH_CMD, RELOAD_CMD,
+const TUI_COMMANDS: [CmdUsage; 7] = [
+    QUIT_CMD,
+    CLEAR_CMD,
+    IGNORE_CMD,
+    NOTIFY_CMD,
+    SWITCH_CMD,
+    RELOAD_CMD,
+    CHANNELS_CMD,
 ];
 
 // Public for benchmarks
@@ -279,6 +286,10 @@ impl TUI {
                         &MsgTarget::CurrentTab,
                     ),
                 }
+                CmdResult::Ok
+            }
+            Some("channels") => {
+                self.channels();
                 CmdResult::Ok
             }
             Some("reload") => {
@@ -981,6 +992,21 @@ impl TUI {
         }
 
         self.h_scroll -= scroll_left;
+    }
+
+    pub(crate) fn channels(&mut self) {
+        let mut chan_names = Vec::new();
+        for tab in self.tabs.iter() {
+            match tab.src {
+                MsgSource::Chan { ref chan, .. } => {
+                    chan_names.push(chan.display());
+                }
+                _ => (),
+            }
+        }
+        let names = &format!("{}", chan_names.join(", "));
+
+        self.add_client_msg(&format!("Channels: {}", names), &MsgTarget::CurrentTab);
     }
 
     pub(crate) fn switch(&mut self, string: &str) {
